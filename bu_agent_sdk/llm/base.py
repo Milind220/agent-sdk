@@ -5,11 +5,13 @@ This module provides a unified interface for chat models across different provid
 (OpenAI, Anthropic, Google, Grok) with first-class support for tool calling.
 """
 
+from collections.abc import AsyncIterator
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 from bu_agent_sdk.llm.messages import BaseMessage
+from bu_agent_sdk.llm.streaming import ModelCapabilities, ModelDeltaEvent
 from bu_agent_sdk.llm.views import ChatInvokeCompletion
 
 
@@ -132,6 +134,29 @@ class BaseChatModel(Protocol):
                     response = await llm.ainvoke(messages=messages, tools=[weather_tool])
                 ```
         """
+        ...
+
+
+@runtime_checkable
+class SupportsModelCapabilities(Protocol):
+    """Optional protocol for adapters that expose capability flags."""
+
+    @property
+    def capabilities(self) -> ModelCapabilities:
+        ...
+
+
+@runtime_checkable
+class SupportsStreamingInvoke(Protocol):
+    """Optional protocol for adapters that support token-level streaming."""
+
+    async def astream_invoke(
+        self,
+        messages: list[BaseMessage],
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: ToolChoice | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ModelDeltaEvent]:
         ...
 
     @classmethod

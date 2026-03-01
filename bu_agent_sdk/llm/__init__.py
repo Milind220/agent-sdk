@@ -10,7 +10,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from bu_agent_sdk.llm.base import BaseChatModel, ToolChoice, ToolDefinition
+from bu_agent_sdk.llm.base import (
+    BaseChatModel,
+    SupportsModelCapabilities,
+    SupportsStreamingInvoke,
+    ToolChoice,
+    ToolDefinition,
+)
 from bu_agent_sdk.llm.messages import (
     AssistantMessage,
     BaseMessage,
@@ -28,6 +34,14 @@ from bu_agent_sdk.llm.messages import (
 from bu_agent_sdk.llm.messages import ContentPartRefusalParam as ContentRefusal
 from bu_agent_sdk.llm.messages import ContentPartTextParam as ContentText
 from bu_agent_sdk.llm.messages import ContentPartThinkingParam as ContentThinking
+from bu_agent_sdk.llm.streaming import (
+    CompletionDeltaEvent,
+    ModelCapabilities,
+    ModelDeltaEvent,
+    TextDeltaEvent,
+    ThinkingDeltaEvent,
+    ToolCallArgumentsDeltaEvent,
+)
 from bu_agent_sdk.llm.views import ChatInvokeCompletion, ChatInvokeUsage
 
 if TYPE_CHECKING:
@@ -113,6 +127,14 @@ __all__ = [
     "ContentThinking",
     "ContentRedactedThinking",
     "BaseChatModel",
+    "SupportsStreamingInvoke",
+    "SupportsModelCapabilities",
+    "ModelCapabilities",
+    "ModelDeltaEvent",
+    "TextDeltaEvent",
+    "ThinkingDeltaEvent",
+    "ToolCallArgumentsDeltaEvent",
+    "CompletionDeltaEvent",
     "ChatOpenAI",
     "ChatOpenAILike",
     "ChatAnthropic",
