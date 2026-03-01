@@ -69,6 +69,8 @@ Refs:
 - [x] Added normalized stream event primitives (`TextDeltaEvent`, `ThinkingDeltaEvent`, `CompletionDeltaEvent`).
 - [x] Implemented `ChatGrok.astream_invoke(...)` using xAI SDK stream path.
 - [x] Integrated `Agent.query_stream(...)` with model streaming when adapter supports it.
+- [x] Added live smoke harness script for manual real-key verification.
+- [x] Added optional live pytest module (`RUN_LIVE_TESTS=1` gated).
 - [ ] OpenAI adapter move to Responses API.
 - [ ] Anthropic streaming adapter integration.
 - [ ] Google streaming adapter integration.
