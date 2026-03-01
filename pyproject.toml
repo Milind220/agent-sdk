@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "bu-agent-sdk"
-version = "0.0.1"
+name = "agent-sdk"
+version = "0.1.0"
 description = "An agent is just a for-loop. The simplest possible agent framework."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [
-    { name = "Browser Use", email = "hello@browser-use.com" }
+    { name = "Milind Sharma", email = "milindsharma8@gmail.com" }
 ]
 keywords = ["agent", "llm", "ai", "tool-calling", "anthropic", "openai", "google"]
 classifiers = [
@@ -42,9 +42,9 @@ google = ["google-genai>=1.0.0"]
 observability = ["lmnr>=0.4.0"]
 
 [project.urls]
-Homepage = "https://github.com/browser-use/bu-agent-sdk"
-Documentation = "https://github.com/browser-use/bu-agent-sdk#readme"
-Repository = "https://github.com/browser-use/bu-agent-sdk"
+Homepage = "https://github.com/Milind220/agent-sdk"
+Documentation = "https://github.com/Milind220/agent-sdk#readme"
+Repository = "https://github.com/Milind220/agent-sdk"
 
 [tool.hatch.build.targets.wheel]
 packages = ["bu_agent_sdk"]
@@ -52,7 +52,7 @@ packages = ["bu_agent_sdk"]
 [tool.hatch.build.targets.sdist]
 include = [
     "/bu_agent_sdk",
-    "/examples",
+    "/bu_agent_sdk/examples",
     "/README.md",
     "/LICENSE",
 ]

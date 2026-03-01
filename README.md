@@ -1,4 +1,4 @@
-# bu-agent-sdk
+# agent-sdk
 
 _An agent is just a for-loop._
 
@@ -15,7 +15,7 @@ uv sync
 or
 
 ```bash
-uv add bu-agent-sdk
+uv add agent-sdk
 ```
 
 ## Quick Start
@@ -252,4 +252,4 @@ MIT
 
 ## Credits
 
-Built by [Browser Use](https://browser-use.com). Inspired by reverse-engineering Claude Code and Gemini CLI.
+Maintained by Milind Sharma. Inspired by reverse-engineering Claude Code and Gemini CLI.

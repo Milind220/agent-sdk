@@ -1,25 +1,10 @@
-# Browser Use LLMs
+# LLM Connectors
 
-We officially support the following LLMs:
+Current, implemented connectors in this repository:
 
-- OpenAI
-- Anthropic
-- Google
-- Groq
-- Ollama
-- DeepSeek
+- OpenAI (`ChatOpenAI`)
+- OpenAI-compatible APIs (`ChatOpenAILike`)
+- Anthropic (`ChatAnthropic`)
+- Google Gemini (`ChatGoogle`)
 
-- Mistral
-
-## Mistral specifics
-
-Use `ChatMistral` with `MISTRAL_API_KEY` (and optional `MISTRAL_BASE_URL`). Structured outputs automatically strip unsupported JSON schema keywords (`minLength`, `maxLength`, `pattern`, `format`), and generation uses `max_tokens` plus the optional `safe_prompt` flag.
-
-- Cerebras
-
-
-## Migrating from LangChain
-
-Because of how we implemented the LLMs, we can technically support anything. If you want to use a LangChain model, you can use the `ChatLangchain` (NOT OFFICIALLY SUPPORTED) class.
-
-You can find all the details in the [LangChain example](/examples/models/langchain/example.py). We suggest you grab that code and use it as a reference.
+Optional-provider stubs exist in `bu_agent_sdk.llm.__init__`, but those modules are not present in this repo snapshot.
