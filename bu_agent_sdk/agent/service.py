@@ -77,7 +77,12 @@ from bu_agent_sdk.agent.events import (
     ToolCallEvent,
     ToolResultEvent,
 )
-from bu_agent_sdk.llm.base import BaseChatModel, ToolChoice, ToolDefinition
+from bu_agent_sdk.llm.base import (
+    BaseChatModel,
+    SupportsStreamingInvoke,
+    ToolChoice,
+    ToolDefinition,
+)
 from bu_agent_sdk.llm.exceptions import ModelProviderError, ModelRateLimitError
 from bu_agent_sdk.llm.messages import (
     AssistantMessage,
@@ -90,6 +95,12 @@ from bu_agent_sdk.llm.messages import (
     UserMessage,
 )
 from bu_agent_sdk.llm.views import ChatInvokeCompletion
+from bu_agent_sdk.llm.streaming import (
+    CompletionDeltaEvent,
+    ModelDeltaEvent,
+    TextDeltaEvent,
+    ThinkingDeltaEvent,
+)
 from bu_agent_sdk.observability import Laminar, observe
 from bu_agent_sdk.tokens import TokenCost, UsageSummary
 from bu_agent_sdk.tools.decorator import Tool
@@ -531,6 +542,105 @@ class Agent:
             raise last_error
         raise RuntimeError("Retry loop completed without return or exception")
 
+    async def _invoke_llm_stream(self) -> AsyncIterator[ModelDeltaEvent]:
+        """Invoke streaming LLM path with retry handling.
+
+        Retries are only safe before any deltas are emitted. Once stream output starts,
+        retrying would duplicate user-visible chunks.
+        """
+        if not isinstance(self.llm, SupportsStreamingInvoke):
+            raise RuntimeError("Streaming invoke requested for non-streaming model")
+
+        last_error: Exception | None = None
+
+        for attempt in range(self.llm_max_retries):
+            emitted_any = False
+            try:
+                async for delta in self.llm.astream_invoke(
+                    messages=self._messages,
+                    tools=self.tool_definitions if self.tools else None,
+                    tool_choice=self.tool_choice if self.tools else None,
+                ):
+                    emitted_any = True
+                    yield delta
+                return
+
+            except ModelRateLimitError as e:
+                last_error = e
+                if emitted_any or attempt >= self.llm_max_retries - 1:
+                    raise
+
+                delay = min(
+                    self.llm_retry_base_delay * (2**attempt),
+                    self.llm_retry_max_delay,
+                )
+                jitter = random.uniform(0, delay * 0.1)
+                total_delay = delay + jitter
+                logger.warning(
+                    f"⚠️ Got rate limit error (stream), retrying in {total_delay:.1f}s... "
+                    f"(attempt {attempt + 1}/{self.llm_max_retries})"
+                )
+                await asyncio.sleep(total_delay)
+                continue
+
+            except ModelProviderError as e:
+                last_error = e
+                is_retryable = (
+                    hasattr(e, "status_code")
+                    and e.status_code in self.llm_retryable_status_codes
+                )
+                if (
+                    emitted_any
+                    or not is_retryable
+                    or attempt >= self.llm_max_retries - 1
+                ):
+                    raise
+
+                delay = min(
+                    self.llm_retry_base_delay * (2**attempt),
+                    self.llm_retry_max_delay,
+                )
+                jitter = random.uniform(0, delay * 0.1)
+                total_delay = delay + jitter
+                logger.warning(
+                    f"⚠️ Got {e.status_code} error (stream), retrying in {total_delay:.1f}s... "
+                    f"(attempt {attempt + 1}/{self.llm_max_retries})"
+                )
+                await asyncio.sleep(total_delay)
+                continue
+
+            except Exception as e:
+                last_error = e
+                error_message = str(e).lower()
+                is_timeout = "timeout" in error_message or "cancelled" in error_message
+                is_connection_error = (
+                    "connection" in error_message or "connect" in error_message
+                )
+
+                if (
+                    not emitted_any
+                    and (is_timeout or is_connection_error)
+                    and attempt < self.llm_max_retries - 1
+                ):
+                    delay = min(
+                        self.llm_retry_base_delay * (2**attempt),
+                        self.llm_retry_max_delay,
+                    )
+                    jitter = random.uniform(0, delay * 0.1)
+                    total_delay = delay + jitter
+                    error_type = "timeout" if is_timeout else "connection error"
+                    logger.warning(
+                        f"⚠️ Got {error_type} (stream), retrying in {total_delay:.1f}s... "
+                        f"(attempt {attempt + 1}/{self.llm_max_retries})"
+                    )
+                    await asyncio.sleep(total_delay)
+                    continue
+                raise
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Retry loop completed without return or exception")
+
     async def _generate_max_iterations_summary(self) -> str:
         """Generate a summary of what was accomplished when max iterations is reached.
 
@@ -750,11 +860,36 @@ Keep the summary brief but informative."""
             # Destroy ephemeral messages from previous iteration before LLM sees them again
             self._destroy_ephemeral_messages()
 
-            # Invoke the LLM
-            response = await self._invoke_llm()
+            # Invoke the LLM (streaming when supported)
+            streamed_text = False
+            streamed_thinking = False
+            response: ChatInvokeCompletion | None = None
+            if isinstance(self.llm, SupportsStreamingInvoke):
+                async for delta in self._invoke_llm_stream():
+                    if isinstance(delta, TextDeltaEvent):
+                        if delta.content:
+                            streamed_text = True
+                            yield TextEvent(content=delta.content)
+                    elif isinstance(delta, ThinkingDeltaEvent):
+                        if delta.content:
+                            streamed_thinking = True
+                            yield ThinkingEvent(content=delta.content)
+                    elif isinstance(delta, CompletionDeltaEvent):
+                        response = delta.completion
+
+                if response is None:
+                    raise ModelProviderError(
+                        message="Streaming LLM invocation ended without completion event",
+                        model=self.llm.name,
+                    )
+
+                if response.usage:
+                    self._token_cost.add_usage(self.llm.model, response.usage)
+            else:
+                response = await self._invoke_llm()
 
             # Check for thinking content and yield it
-            if response.thinking:
+            if response.thinking and not streamed_thinking:
                 yield ThinkingEvent(content=response.thinking)
 
             # Add assistant message to history
@@ -780,17 +915,17 @@ Keep the summary brief but informative."""
 
                     # All done - return the response
                     await self._check_and_compact(response)
-                    if response.content:
+                    if response.content and not streamed_text:
                         yield TextEvent(content=response.content)
                     yield FinalResponseEvent(content=response.content or "")
                     return
                 # Autonomous mode: require done tool, yield text and continue loop
-                if response.content:
+                if response.content and not streamed_text:
                     yield TextEvent(content=response.content)
                 continue
 
             # Yield text content if present alongside tool calls
-            if response.content:
+            if response.content and not streamed_text:
                 yield TextEvent(content=response.content)
 
             # Execute all tool calls, yielding events for each
