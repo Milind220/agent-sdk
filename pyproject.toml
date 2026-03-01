@@ -12,7 +12,7 @@ license = "MIT"
 authors = [
     { name = "Milind Sharma", email = "milindsharma8@gmail.com" }
 ]
-keywords = ["agent", "llm", "ai", "tool-calling", "anthropic", "openai", "google"]
+keywords = ["agent", "llm", "ai", "tool-calling", "anthropic", "openai", "google", "grok", "xai"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -30,15 +30,17 @@ dependencies = [
     "dotenv>=0.9.9",
     "anyio>=4.12.1",
     "httpx>=0.28.1",
-    "anthropic>=0.40.0",
-    "openai>=1.50.0",
-    "google-genai>=1.0.0",
+    "anthropic>=0.84.0",
+    "openai>=2.24.0",
+    "google-genai>=1.65.0",
+    "xai-sdk>=1.7.0",
 ]
 
 [project.optional-dependencies]
-anthropic = ["anthropic>=0.40.0"]
-openai = ["openai>=1.50.0"]
-google = ["google-genai>=1.0.0"]
+anthropic = ["anthropic>=0.84.0"]
+openai = ["openai>=2.24.0"]
+google = ["google-genai>=1.65.0"]
+grok = ["xai-sdk>=1.7.0"]
 observability = ["lmnr>=0.4.0"]
 
 [project.urls]

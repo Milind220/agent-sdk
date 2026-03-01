@@ -84,12 +84,13 @@ async def get_state() -> str:
 ~300 lines per provider. Same interface. Full control:
 
 ```python
-from bu_agent_sdk.llm import ChatAnthropic, ChatOpenAI, ChatGoogle
+from bu_agent_sdk.llm import ChatAnthropic, ChatOpenAI, ChatGoogle, ChatGrok
 
 # All implement BaseChatModel
 agent = Agent(llm=ChatAnthropic(model="claude-sonnet-4-20250514"), tools=tools)
 agent = Agent(llm=ChatOpenAI(model="gpt-4o"), tools=tools)
 agent = Agent(llm=ChatGoogle(model="gemini-2.0-flash"), tools=tools)
+agent = Agent(llm=ChatGrok(model="grok-4-latest"), tools=tools)
 ```
 
 ### Context Compaction

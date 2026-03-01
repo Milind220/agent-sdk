@@ -2,7 +2,7 @@
 LLM abstraction layer with type-safe tool calling support.
 
 This module provides a unified interface for chat models across different providers
-(OpenAI, Anthropic, Google) with first-class support for tool calling.
+(OpenAI, Anthropic, Google, Grok) with first-class support for tool calling.
 """
 
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -55,7 +55,7 @@ Tool choice options:
 class BaseChatModel(Protocol):
     """Protocol defining the interface for chat models.
 
-    All LLM implementations (OpenAI, Anthropic, Google, etc.) must implement this protocol.
+    All LLM implementations (OpenAI, Anthropic, Google, Grok, etc.) must implement this protocol.
     """
 
     _verified_api_keys: bool = False
@@ -64,7 +64,7 @@ class BaseChatModel(Protocol):
 
     @property
     def provider(self) -> str:
-        """The provider name (e.g., 'openai', 'anthropic', 'google')."""
+        """The provider name (e.g., 'openai', 'anthropic', 'google', 'grok')."""
         ...
 
     @property
