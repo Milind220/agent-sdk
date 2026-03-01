@@ -1,4 +1,4 @@
-# agent-sdk
+# the-agent-sdk
 
 _An agent is just a for-loop._
 
@@ -15,7 +15,7 @@ uv sync
 or
 
 ```bash
-uv add agent-sdk
+uv add the-agent-sdk
 ```
 
 ## Quick Start

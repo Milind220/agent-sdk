@@ -6,6 +6,12 @@ on:
       - main
       - alpha
   workflow_dispatch:
+    inputs:
+      force_publish_current:
+        description: "Build and publish current pyproject version without semantic-release bump"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -72,7 +78,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/p/agent-sdk
+      url: https://pypi.org/p/the-agent-sdk
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -80,5 +86,30 @@ jobs:
           name: python-dist
           path: dist/
 
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  manual_publish:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.force_publish_current == 'true'
+    permissions:
+      id-token: write
+      contents: read
+    environment:
+      name: pypi
+      url: https://pypi.org/p/the-agent-sdk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+      - name: Build distributions
+        run: |
+          uv build
+          uv run --with twine twine check dist/*
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

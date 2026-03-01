@@ -3,7 +3,7 @@
 ## One-time setup
 
 1. Create/verify PyPI account.
-2. In PyPI, add trusted publisher for `agent-sdk`:
+2. In PyPI, add trusted publisher for `the-agent-sdk`:
    - Owner: `Milind220`
    - Repository: `agent-sdk`
    - Workflow: `publish-pypi.yml`
@@ -43,4 +43,12 @@
 
 1. Check GitHub Actions run for `publish-pypi.yml`.
 2. Check GitHub Releases for new tag.
-3. Check PyPI: `https://pypi.org/project/agent-sdk/`.
+3. Check PyPI: `https://pypi.org/project/the-agent-sdk/`.
+
+## One-time manual publish (for current 0.1.0)
+
+If you need to publish the current `pyproject.toml` version without creating a new semantic-release tag:
+
+1. Run workflow `Release and Publish`.
+2. Set input `force_publish_current=true`.
+3. This publishes current package version as-is (currently `0.1.0`).

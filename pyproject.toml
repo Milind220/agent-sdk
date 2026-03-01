@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-sdk"
+name = "the-agent-sdk"
 version = "0.1.0"
 description = "An agent is just a for-loop. The simplest possible agent framework."
 readme = "README.md"
