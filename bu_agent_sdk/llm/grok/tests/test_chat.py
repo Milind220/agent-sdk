@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from bu_agent_sdk.llm.exceptions import ModelRateLimitError
 from bu_agent_sdk.llm.grok.chat import ChatGrok
 from bu_agent_sdk.llm.messages import UserMessage
 from bu_agent_sdk.llm.streaming import CompletionDeltaEvent, TextDeltaEvent, ThinkingDeltaEvent
@@ -90,6 +91,32 @@ class _FakeStreamChatEndpoint:
 class _FakeStreamClient:
     def __init__(self, stream_steps: list[tuple[FakeResponse, FakeChunk]]):
         self.chat = _FakeStreamChatEndpoint(stream_steps)
+
+
+class _FailAfterChunkSession:
+    async def stream(self):
+        yield (
+            FakeResponse(content="p", reasoning_content="r"),
+            FakeChunk(content="p", reasoning_content="r"),
+        )
+        raise Exception("429 too many requests")
+
+    async def sample(self):
+        return FakeResponse()
+
+
+class _CountingFailEndpoint:
+    def __init__(self):
+        self.create_calls = 0
+
+    def create(self, **kwargs):
+        self.create_calls += 1
+        return _FailAfterChunkSession()
+
+
+class _CountingFailClient:
+    def __init__(self):
+        self.chat = _CountingFailEndpoint()
 
 
 @pytest.mark.anyio
@@ -185,3 +212,16 @@ async def test_grok_astream_invoke_emits_deltas_and_final_completion() -> None:
     assert isinstance(events[4], CompletionDeltaEvent)
     assert events[4].completion.content == "hello"
     assert events[4].completion.thinking == "reason"
+
+
+@pytest.mark.anyio
+async def test_grok_astream_does_not_retry_after_emitting_partial_output() -> None:
+    model = ChatGrok(model="grok-4-latest", max_retries=3, retry_base_delay=0)
+    fake_client = _CountingFailClient()
+    model.get_client = lambda: fake_client  # type: ignore[method-assign]
+
+    with pytest.raises(ModelRateLimitError, match="429 too many requests"):
+        async for _ in model.astream_invoke([UserMessage(content="hi")]):
+            pass
+
+    assert fake_client.chat.create_calls == 1
