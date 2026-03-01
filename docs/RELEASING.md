@@ -2,23 +2,45 @@
 
 ## One-time setup
 
-1. Create a PyPI account and verify email.
-2. Create a pending project for `agent-sdk` (or publish first release manually once).
-3. In PyPI project settings, add a trusted publisher:
+1. Create/verify PyPI account.
+2. In PyPI, add trusted publisher for `agent-sdk`:
    - Owner: `Milind220`
    - Repository: `agent-sdk`
    - Workflow: `publish-pypi.yml`
    - Environment: `pypi`
-4. In GitHub repo settings, create environment `pypi` (no secrets needed).
+3. In GitHub repo settings, create environment `pypi`.
 
-## Release flow
+## Automated release behavior
 
-1. Bump `version` in `pyproject.toml`.
-2. Commit + push to `main`.
-3. Tag release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-4. GitHub Action `.github/workflows/publish-pypi.yml` builds + publishes to PyPI.
+- Workflow: `.github/workflows/publish-pypi.yml`
+- Triggers: pushes to `main` and `alpha`
+- Versioning engine: Python Semantic Release (Conventional Commits)
+
+### Version bump rules
+
+- `feat:` -> minor
+- `fix:` / `perf:` -> patch
+- `feat!:` / `fix!:` / `BREAKING CHANGE:` -> major (for 1.x+)
+- `docs:` / `chore:` / `ci:` / `style:` / `refactor:` / `test:` -> no release
+
+### Prerelease behavior
+
+- Branch `main`: stable releases
+- Branch `alpha`: prereleases with `-alpha.N` suffix
+
+## First publish target
+
+- Current calculated next release is `v0.1.0`.
+- No manual tag/release required.
+
+## Day-to-day flow
+
+1. Merge Conventional Commit PRs to `main` (or `alpha` for prereleases).
+2. Workflow auto-detects next version, creates tag + GitHub release, builds package.
+3. If a releasable commit exists, package auto-publishes to PyPI via trusted publisher.
 
 ## Verify
 
-1. Confirm workflow run is green.
-2. Confirm package page: `https://pypi.org/project/agent-sdk/`.
+1. Check GitHub Actions run for `publish-pypi.yml`.
+2. Check GitHub Releases for new tag.
+3. Check PyPI: `https://pypi.org/project/agent-sdk/`.
