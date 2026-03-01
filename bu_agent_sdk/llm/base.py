@@ -136,6 +136,21 @@ class BaseChatModel(Protocol):
         """
         ...
 
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        source_type: type,
+        handler: Any,
+    ) -> Any:
+        """Allow this Protocol to be used in Pydantic models.
+
+        This is useful for type-safe agent settings.
+        Returns a schema that accepts any object (since this is a Protocol).
+        """
+        from pydantic_core import core_schema
+
+        return core_schema.any_schema()
+
 
 @runtime_checkable
 class SupportsModelCapabilities(Protocol):
@@ -158,18 +173,3 @@ class SupportsStreamingInvoke(Protocol):
         **kwargs: Any,
     ) -> AsyncIterator[ModelDeltaEvent]:
         ...
-
-    @classmethod
-    def __get_pydantic_core_schema__(
-        cls,
-        source_type: type,
-        handler: Any,
-    ) -> Any:
-        """Allow this Protocol to be used in Pydantic models.
-
-        This is useful for type-safe agent settings.
-        Returns a schema that accepts any object (since this is a Protocol).
-        """
-        from pydantic_core import core_schema
-
-        return core_schema.any_schema()
