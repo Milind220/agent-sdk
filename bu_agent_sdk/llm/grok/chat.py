@@ -412,6 +412,7 @@ class ChatGrok(BaseChatModel):
         for attempt in range(self.max_retries):
             start_time = time.time()
             self.model_logger.debug(f"🚀 Starting xAI stream call to {self.model}")
+            emitted_any = False
 
             try:
                 chat = self.get_client().chat.create(**create_params)
@@ -420,8 +421,10 @@ class ChatGrok(BaseChatModel):
                 async for response, chunk in chat.stream():
                     final_response = response
                     if chunk.content:
+                        emitted_any = True
                         yield TextDeltaEvent(content=chunk.content)
                     if chunk.reasoning_content:
+                        emitted_any = True
                         yield ThinkingDeltaEvent(content=chunk.reasoning_content)
 
                 if final_response is None:
@@ -472,6 +475,7 @@ class ChatGrok(BaseChatModel):
                 if (
                     model_error.status_code in self.retryable_status_codes
                     and attempt < self.max_retries - 1
+                    and not emitted_any
                 ):
                     delay = min(
                         self.retry_base_delay * (2**attempt),
