@@ -6,6 +6,7 @@ import pytest
 
 from bu_agent_sdk.llm.grok.chat import ChatGrok
 from bu_agent_sdk.llm.messages import UserMessage
+from bu_agent_sdk.llm.streaming import CompletionDeltaEvent, TextDeltaEvent, ThinkingDeltaEvent
 
 
 @dataclass
@@ -32,6 +33,12 @@ class FakeResponse:
             self.tool_calls = []
 
 
+@dataclass
+class FakeChunk:
+    content: str = ""
+    reasoning_content: str = ""
+
+
 class _FakeChatSession:
     def __init__(self, responses: list[object]):
         self._responses = responses
@@ -56,6 +63,33 @@ class _FakeChatEndpoint:
 class _FakeClient:
     def __init__(self, responses: list[object]):
         self.chat = _FakeChatEndpoint(responses)
+
+
+class _FakeStreamChatSession:
+    def __init__(self, stream_steps: list[tuple[FakeResponse, FakeChunk]]):
+        self._stream_steps = stream_steps
+
+    async def stream(self):
+        for response, chunk in self._stream_steps:
+            yield response, chunk
+
+    async def sample(self):
+        return FakeResponse()
+
+
+class _FakeStreamChatEndpoint:
+    def __init__(self, stream_steps: list[tuple[FakeResponse, FakeChunk]]):
+        self.stream_steps = stream_steps
+        self.last_create_kwargs = None
+
+    def create(self, **kwargs):
+        self.last_create_kwargs = kwargs
+        return _FakeStreamChatSession(self.stream_steps)
+
+
+class _FakeStreamClient:
+    def __init__(self, stream_steps: list[tuple[FakeResponse, FakeChunk]]):
+        self.chat = _FakeStreamChatEndpoint(stream_steps)
 
 
 @pytest.mark.anyio
@@ -119,3 +153,35 @@ async def test_grok_create_params_include_parity_fields() -> None:
     assert create_kwargs["use_encrypted_content"] is True
     assert create_kwargs["max_turns"] == 5
     assert create_kwargs["conversation_id"] == "conv_1"
+
+
+@pytest.mark.anyio
+async def test_grok_astream_invoke_emits_deltas_and_final_completion() -> None:
+    model = ChatGrok(model="grok-4-latest", max_retries=1)
+    stream_steps = [
+        (
+            FakeResponse(content="hel", reasoning_content="rea"),
+            FakeChunk(content="hel", reasoning_content="rea"),
+        ),
+        (
+            FakeResponse(content="hello", reasoning_content="reason"),
+            FakeChunk(content="lo", reasoning_content="son"),
+        ),
+    ]
+    fake_client = _FakeStreamClient(stream_steps)
+    model.get_client = lambda: fake_client  # type: ignore[method-assign]
+
+    events = [event async for event in model.astream_invoke([UserMessage(content="hi")])]
+
+    assert len(events) == 5
+    assert isinstance(events[0], TextDeltaEvent)
+    assert events[0].content == "hel"
+    assert isinstance(events[1], ThinkingDeltaEvent)
+    assert events[1].content == "rea"
+    assert isinstance(events[2], TextDeltaEvent)
+    assert events[2].content == "lo"
+    assert isinstance(events[3], ThinkingDeltaEvent)
+    assert events[3].content == "son"
+    assert isinstance(events[4], CompletionDeltaEvent)
+    assert events[4].completion.content == "hello"
+    assert events[4].completion.thinking == "reason"

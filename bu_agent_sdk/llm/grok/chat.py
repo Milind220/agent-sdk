@@ -4,6 +4,7 @@ import random
 import re
 import time
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -19,6 +20,13 @@ from bu_agent_sdk.llm.base import BaseChatModel, ToolChoice, ToolDefinition
 from bu_agent_sdk.llm.exceptions import ModelProviderError, ModelRateLimitError
 from bu_agent_sdk.llm.grok.serializer import GrokMessageSerializer
 from bu_agent_sdk.llm.messages import BaseMessage, Function, ToolCall
+from bu_agent_sdk.llm.streaming import (
+    CompletionDeltaEvent,
+    ModelCapabilities,
+    ModelDeltaEvent,
+    TextDeltaEvent,
+    ThinkingDeltaEvent,
+)
 from bu_agent_sdk.llm.views import ChatInvokeCompletion, ChatInvokeUsage
 
 logger = logging.getLogger("bu_agent_sdk.llm.grok")
@@ -80,6 +88,14 @@ class ChatGrok(BaseChatModel):
     @property
     def name(self) -> str:
         return str(self.model)
+
+    @property
+    def capabilities(self) -> ModelCapabilities:
+        return ModelCapabilities(
+            supports_token_stream=True,
+            supports_reasoning_stream=True,
+            supports_server_state=True,
+        )
 
     def _get_client_params(self) -> dict[str, Any]:
         api_key = self.api_key or os.getenv("XAI_API_KEY")
@@ -368,6 +384,103 @@ class ChatGrok(BaseChatModel):
                     total_delay = delay + jitter
                     self.model_logger.warning(
                         f"⚠️ xAI retry in {total_delay:.1f}s (attempt {attempt + 1}/{self.max_retries})"
+                    )
+                    await asyncio.sleep(total_delay)
+                    continue
+
+                raise model_error from e
+
+        raise RuntimeError("Retry loop completed without return or exception")
+
+    async def astream_invoke(
+        self,
+        messages: list[BaseMessage],
+        tools: list[ToolDefinition] | None = None,
+        tool_choice: ToolChoice | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ModelDeltaEvent]:
+        serialized_messages = GrokMessageSerializer.serialize_messages(messages)
+        create_params = self._build_create_params(
+            serialized_messages=serialized_messages,
+            tools=tools,
+            tool_choice=tool_choice,
+            extra_kwargs=kwargs,
+        )
+
+        assert self.max_retries >= 1, "max_retries must be at least 1"
+
+        for attempt in range(self.max_retries):
+            start_time = time.time()
+            self.model_logger.debug(f"🚀 Starting xAI stream call to {self.model}")
+
+            try:
+                chat = self.get_client().chat.create(**create_params)
+                final_response: Response | None = None
+
+                async for response, chunk in chat.stream():
+                    final_response = response
+                    if chunk.content:
+                        yield TextDeltaEvent(content=chunk.content)
+                    if chunk.reasoning_content:
+                        yield ThinkingDeltaEvent(content=chunk.reasoning_content)
+
+                if final_response is None:
+                    final_response = await chat.sample()
+
+                elapsed = time.time() - start_time
+                self.model_logger.debug(f"✅ xAI stream response in {elapsed:.2f}s")
+
+                usage = self._get_usage(final_response)
+                if usage and os.getenv("bu_agent_sdk_LLM_DEBUG"):
+                    cached = usage.prompt_cached_tokens or 0
+                    input_tokens = usage.prompt_tokens - cached
+                    logger.info(
+                        f"📊 {self.model}: {input_tokens:,} in + {cached:,} cached + {usage.completion_tokens:,} out"
+                    )
+
+                yield CompletionDeltaEvent(
+                    completion=ChatInvokeCompletion(
+                        content=final_response.content or None,
+                        tool_calls=self._extract_tool_calls(final_response),
+                        thinking=final_response.reasoning_content or None,
+                        redacted_thinking=final_response.encrypted_content or None,
+                        usage=usage,
+                        stop_reason=self._extract_stop_reason(final_response),
+                    )
+                )
+                return
+            except Exception as e:
+                elapsed = time.time() - start_time
+                status_code = self._infer_status_code(e) or 502
+                error_message = self._error_message(e)
+                self.model_logger.error(
+                    f"💥 xAI stream call failed after {elapsed:.2f}s: status={status_code} error={error_message}"
+                )
+
+                if status_code == 429:
+                    model_error: ModelProviderError = ModelRateLimitError(
+                        message=error_message,
+                        model=self.name,
+                    )
+                else:
+                    model_error = ModelProviderError(
+                        message=error_message,
+                        status_code=status_code,
+                        model=self.name,
+                    )
+
+                if (
+                    model_error.status_code in self.retryable_status_codes
+                    and attempt < self.max_retries - 1
+                ):
+                    delay = min(
+                        self.retry_base_delay * (2**attempt),
+                        self.retry_max_delay,
+                    )
+                    jitter = random.uniform(0, delay * 0.1)
+                    total_delay = delay + jitter
+                    self.model_logger.warning(
+                        f"⚠️ xAI stream retry in {total_delay:.1f}s (attempt {attempt + 1}/{self.max_retries})"
                     )
                     await asyncio.sleep(total_delay)
                     continue
